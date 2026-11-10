@@ -1,0 +1,19 @@
+name: Compilar
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  compilar:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar que la app compila para iPad
+        run: |
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          cd Cuaderno.swiftpm
+          xcrun swiftc -typecheck -parse-as-library \
+            -sdk "$SDK" -target arm64-apple-ios17.5-simulator \
+            App.swift Library.swift Editor.swift Canvas.swift Shapes.swift Tools.swift
