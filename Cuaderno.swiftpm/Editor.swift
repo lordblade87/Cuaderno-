@@ -199,6 +199,9 @@ struct EditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             ToolBar(state: state, photo: $photo)
+            if state.tool == .pen || state.tool == .shape {
+                PenRow(state: state)
+            }
             Divider()
             HStack(spacing: 0) {
                 if state.showSidebar {
@@ -363,18 +366,7 @@ struct ToolBar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
-                Menu {
-                    Picker("Tipo de lapicera", selection: $state.settings.penType) {
-                        ForEach(PenType.allCases) { t in
-                            Text(t.label).tag(t)
-                        }
-                    }
-                    Toggle("Formas al mantener el lápiz", isOn: $state.settings.autoShape)
-                } label: {
-                    ToolIcon(symbol: "pencil.tip", on: state.tool == .pen)
-                } primaryAction: {
-                    state.select(.pen)
-                }
+                toolButton(.pen, "pencil.tip")
 
                 toolButton(.highlighter, "highlighter")
 
@@ -447,6 +439,36 @@ struct ToolBar: View {
         } label: {
             ToolIcon(symbol: symbol, on: state.tool == t)
         }
+    }
+}
+
+/// Segunda fila: tipos de lapicera, como en GoodNotes.
+struct PenRow: View {
+    @ObservedObject var state: EditorState
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(PenType.allCases) { t in
+                    let on = state.settings.penType == t
+                    Button {
+                        state.settings.penType = t
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: t.symbol).font(.system(size: 17))
+                            Text(t.label).font(.system(size: 10))
+                        }
+                        .frame(width: 64, height: 42)
+                        .foregroundStyle(on ? Color.accentColor : Color.primary)
+                        .background(on ? Color.accentColor.opacity(0.18) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+        }
+        .background(Color(.secondarySystemBackground))
     }
 }
 

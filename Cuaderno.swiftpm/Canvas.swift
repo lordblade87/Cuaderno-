@@ -298,7 +298,7 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         case .pen, .shape:
             canvas.tool = PKInkingTool(s.penType.ink,
                                        color: UIColor(hex: pick(s.penColors, s.penColor, "1A1A1A")),
-                                       width: CGFloat(pick(s.penWidths, s.penWidth, 2.8)))
+                                       width: CGFloat(pick(s.penWidths, s.penWidth, 2.8) * s.penType.scale))
         case .highlighter:
             canvas.tool = PKInkingTool(.marker,
                                        color: UIColor(hex: pick(s.hlColors, s.hlColor, "FFE14D")),

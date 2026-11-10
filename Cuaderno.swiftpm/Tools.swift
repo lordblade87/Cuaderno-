@@ -6,16 +6,29 @@ enum ToolKind: String, Codable {
 }
 
 enum PenType: String, Codable, CaseIterable, Identifiable {
-    case fountain, ballpoint, pencil, monoline
+    case fountain, ballpoint, pencil, monoline, watercolor, crayon
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .fountain: return "Pluma (responde al giro del Pencil Pro)"
+        case .fountain: return "Pluma"
         case .ballpoint: return "Bolígrafo"
         case .pencil: return "Lápiz"
-        case .monoline: return "Trazo uniforme"
+        case .monoline: return "Fino"
+        case .watercolor: return "Acuarela"
+        case .crayon: return "Crayón"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .fountain: return "pencil.tip"
+        case .ballpoint: return "pencil"
+        case .pencil: return "pencil.and.outline"
+        case .monoline: return "pencil.line"
+        case .watercolor: return "paintbrush.pointed"
+        case .crayon: return "scribble.variable"
         }
     }
 
@@ -25,6 +38,18 @@ enum PenType: String, Codable, CaseIterable, Identifiable {
         case .ballpoint: return .pen
         case .pencil: return .pencil
         case .monoline: return .monoline
+        case .watercolor: return .watercolor
+        case .crayon: return .crayon
+        }
+    }
+
+    /// Cada tipo necesita otro grosor para verse parecido con el mismo ajuste.
+    var scale: Double {
+        switch self {
+        case .pencil: return 2
+        case .watercolor: return 6
+        case .crayon: return 5
+        default: return 1
         }
     }
 }
