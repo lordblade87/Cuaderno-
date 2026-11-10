@@ -411,7 +411,7 @@ struct TabStrip: View {
                             }
                             .padding(.leading, 12)
                             .padding(.trailing, 6)
-                            .frame(width: 170, height: 32)
+                            .frame(width: 200, height: 32)
                             .background(on ? Color(.systemBackground) : Color.clear,
                                         in: RoundedRectangle(cornerRadius: 9))
                             .contentShape(Rectangle())
@@ -512,7 +512,7 @@ struct OptionsBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: 3) {
                 Button {
                     state.controller?.undo()
                 } label: {
@@ -544,11 +544,11 @@ struct OptionsBar: View {
                     }
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.25)))
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 6)
             .padding(.vertical, 6)
         }
         .frame(maxWidth: .infinity)
@@ -565,12 +565,12 @@ struct OptionsBar: View {
                 } label: {
                     VStack(spacing: 0) {
                         PenSample(type: t, color: on ? Color(uiColor: UIColor(hex: state.currentColorHex)) : Color.primary)
-                            .frame(width: 44, height: 22)
+                            .frame(width: 40, height: 22)
                         Text(t.label)
                             .font(.system(size: 9, weight: on ? .semibold : .regular))
                             .foregroundStyle(on ? Color.accentColor : Color.secondary)
                     }
-                    .frame(width: 56, height: 40)
+                    .frame(width: 48, height: 40)
                     .background(on ? Color.accentColor.opacity(0.15) : Color.clear,
                                 in: RoundedRectangle(cornerRadius: 8))
                 }
@@ -703,7 +703,7 @@ struct ColorRow: View {
 
     var body: some View {
         if let colors = state.colorSlots {
-            HStack(spacing: 10) {
+            HStack(spacing: 9) {
                 ForEach(colors.indices, id: \.self) { i in
                     Circle()
                         .fill(Color(uiColor: UIColor(hex: colors[i])))
@@ -738,7 +738,7 @@ struct WidthRow: View {
                     Circle()
                         .fill(Color.primary)
                         .frame(width: 5 + CGFloat(i) * 5, height: 5 + CGFloat(i) * 5)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 28, height: 32)
                         .background(state.widthIndex == i ? Color.accentColor.opacity(0.18) : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 8))
                         .contentShape(Rectangle())
