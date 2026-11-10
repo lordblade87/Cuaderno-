@@ -97,6 +97,7 @@ final class ElementView: UIView {
             label.text = el.text
             label.textColor = UIColor(hex: el.color)
             label.font = .systemFont(ofSize: max(CGFloat(el.fontSize) * z, 1))
+            backgroundColor = el.bg.map { UIColor(hex: $0) } ?? .clear
         }
         zoom = z
         layer.borderWidth = selected ? 1.5 : 0
@@ -703,6 +704,22 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         let i = currentIndex()
         store.mutate(nbID) { if $0.pages.indices.contains(i) { $0.pages[i].paper = paper } }
         reload()
+    }
+
+    func addSticky() {
+        guard !layout.isEmpty else { return }
+        let item = layout[currentIndex()]
+        let z = max(canvas.zoomScale, 0.01)
+        let c = CGPoint(x: (canvas.contentOffset.x + canvas.bounds.width / 2) / z,
+                        y: (canvas.contentOffset.y + canvas.bounds.height / 2) / z)
+        let x = min(max(c.x - item.rect.minX - 80, 0), max(item.rect.width - 160, 0))
+        let y = min(max(c.y - item.rect.minY - 60, 0), max(item.rect.height - 120, 0))
+        var el = NoteItem(pageID: item.page.id, kind: .text, rect: CGRect(x: x, y: y, width: 160, height: 120))
+        el.bg = "FFF3A6"
+        el.fontSize = 16
+        state.select(.hand)
+        state.editingIsNew = true
+        state.editing = el
     }
 
     func toggleLandscape() {

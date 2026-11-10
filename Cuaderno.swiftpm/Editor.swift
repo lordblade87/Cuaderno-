@@ -114,7 +114,8 @@ final class EditorState: ObservableObject {
             changeElements { list in list.removeAll { $0.id == item.id } }
             return
         }
-        e.h = textHeight(e.text, size: e.fontSize, width: e.w)
+        let th = textHeight(e.text, size: e.fontSize, width: e.w)
+        e.h = e.bg == nil ? th : max(th, 120)
         settings.textSize = e.fontSize
         let final = e
         changeElements { list in
@@ -178,6 +179,7 @@ struct EditorView: View {
     @State private var showPDF = false
     @State private var showSearch = false
     @State private var showAudio = false
+    @State private var showPhotos = false
 
     init(store: Store, id: UUID) {
         self.store = store
@@ -198,17 +200,26 @@ struct EditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ToolBar(state: state, photo: $photo)
-            if state.tool == .pen || state.tool == .shape {
-                PenRow(state: state)
-            }
+            TabStrip(store: store, current: state.id)
+            mainBar
             Divider()
+            OptionsBar(state: state)
             HStack(spacing: 0) {
                 if state.showSidebar {
                     PageSidebar(state: state, store: store)
                     Divider()
                 }
                 CanvasHost(state: state)
+                    .overlay(alignment: .bottomLeading) {
+                        Text("\(state.current + 1) de \(nb?.pages.count ?? 0)")
+                            .font(.caption.weight(.medium))
+                            .monospacedDigit()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(.regularMaterial, in: Capsule())
+                            .padding(12)
+                            .allowsHitTesting(false)
+                    }
                     .overlay {
                         if let p = state.paletteAt {
                             PaletteOverlay(state: state, at: p)
@@ -216,79 +227,8 @@ struct EditorView: View {
                     }
             }
         }
-        .navigationTitle(nb?.title ?? "")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    state.controller?.flush()
-                    withAnimation { state.showSidebar.toggle() }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                }
-            }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Text("\(state.current + 1)/\(nb?.pages.count ?? 0)")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-
-                Button {
-                    showSearch = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                }
-                AudioButton(audio: state.audio) { showAudio = true }
-
-                Button {
-                    state.toggleBookmark()
-                } label: {
-                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                }
-
-                Menu {
-                    ForEach(Paper.allCases) { p in
-                        Button("Página \(p.label.lowercased())") { state.controller?.addPage(p) }
-                    }
-                } label: {
-                    Image(systemName: "doc.badge.plus")
-                }
-
-                Menu {
-                    if !isPDFPage {
-                        Menu("Papel de esta página") {
-                            ForEach(Paper.allCases) { p in
-                                Button(p.label) { state.controller?.setPaper(p) }
-                            }
-                        }
-                    }
-                    Toggle("Regla", isOn: $state.ruler)
-                    Button("Pegar imagen copiada", systemImage: "doc.on.clipboard") {
-                        if let data = UIPasteboard.general.image?.pngData() {
-                            state.controller?.insertImage(data)
-                        }
-                    }
-                    if !isPDFPage {
-                        Button("Girar página (vertical / apaisada)", systemImage: "rotate.right") {
-                            state.controller?.toggleLandscape()
-                        }
-                    }
-                    Toggle("Formas al mantener el lápiz", isOn: $state.settings.autoShape)
-                    Button("Duplicar página", systemImage: "plus.square.on.square") {
-                        state.controller?.duplicatePage(state.current)
-                    }
-                    Button("Insertar PDF después de esta página", systemImage: "doc.badge.plus") { showPDF = true }
-                    Button("Exportar cuaderno en PDF", systemImage: "square.and.arrow.up") { export(all: true) }
-                    Button("Exportar solo esta página", systemImage: "doc") { export(all: false) }
-                    if (nb?.pages.count ?? 0) > 1 {
-                        Button("Eliminar página", systemImage: "trash", role: .destructive) {
-                            state.controller?.deletePage(state.current)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
+        .photosPicker(isPresented: $showPhotos, selection: $photo, matching: .images)
         .sheet(item: $state.editing) { item in
             TextEditSheet(state: state, el: item)
         }
@@ -316,6 +256,9 @@ struct EditorView: View {
                 }
             }
         }
+        .onAppear {
+            store.openTab(state.id)
+        }
         .onDisappear {
             state.controller?.flush()
             state.audio.stop()
@@ -323,6 +266,97 @@ struct EditorView: View {
             let i = state.current
             store.mutate(state.id) { $0.lastIndex = i }
         }
+    }
+
+    // Barra principal: navegación, herramientas e insertar
+    private var mainBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                bar("sidebar.left", on: state.showSidebar) {
+                    state.controller?.flush()
+                    withAnimation { state.showSidebar.toggle() }
+                }
+                bar("magnifyingglass") { showSearch = true }
+
+                Divider().frame(height: 26).padding(.horizontal, 6)
+
+                tool(.pen, "pencil.tip")
+                tool(.highlighter, "highlighter")
+                tool(.eraser, "eraser")
+                tool(.shape, "triangle")
+                tool(.lasso, "lasso")
+                tool(.text, "textformat")
+                tool(.hand, "hand.point.up.left")
+                tool(.laser, "rays")
+
+                Divider().frame(height: 26).padding(.horizontal, 6)
+
+                Menu {
+                    Button("Imagen de Fotos", systemImage: "photo") { showPhotos = true }
+                    Button("Pegar imagen copiada", systemImage: "doc.on.clipboard") {
+                        if let data = UIPasteboard.general.image?.pngData() {
+                            state.controller?.insertImage(data)
+                        }
+                    }
+                    Button("Nota adhesiva", systemImage: "note.text") { state.controller?.addSticky() }
+                    Button("PDF después de esta página", systemImage: "doc.richtext") { showPDF = true }
+                } label: {
+                    ToolIcon(symbol: "photo.badge.plus", on: false)
+                }
+
+                AudioButton(audio: state.audio) { showAudio = true }
+                    .frame(width: 40, height: 34)
+
+                bar(isBookmarked ? "bookmark.fill" : "bookmark") { state.toggleBookmark() }
+
+                Menu {
+                    ForEach(Paper.allCases) { p in
+                        Button("Página \(p.label.lowercased())") { state.controller?.addPage(p) }
+                    }
+                } label: {
+                    ToolIcon(symbol: "doc.badge.plus", on: false)
+                }
+
+                Menu {
+                    if !isPDFPage {
+                        Menu("Papel de esta página") {
+                            ForEach(Paper.allCases) { p in
+                                Button(p.label) { state.controller?.setPaper(p) }
+                            }
+                        }
+                        Button("Girar página (vertical / apaisada)", systemImage: "rotate.right") {
+                            state.controller?.toggleLandscape()
+                        }
+                    }
+                    Toggle("Regla", isOn: $state.ruler)
+                    Button("Duplicar página", systemImage: "plus.square.on.square") {
+                        state.controller?.duplicatePage(state.current)
+                    }
+                    Button("Exportar cuaderno en PDF", systemImage: "square.and.arrow.up") { export(all: true) }
+                    Button("Exportar solo esta página", systemImage: "doc") { export(all: false) }
+                    if (nb?.pages.count ?? 0) > 1 {
+                        Button("Eliminar página", systemImage: "trash", role: .destructive) {
+                            state.controller?.deletePage(state.current)
+                        }
+                    }
+                } label: {
+                    ToolIcon(symbol: "ellipsis.circle", on: false)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        }
+        .background(Color(.systemBackground))
+    }
+
+    private func bar(_ symbol: String, on: Bool = false, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ToolIcon(symbol: symbol, on: on)
+        }
+    }
+
+    private func tool(_ t: ToolKind, _ symbol: String) -> some View {
+        bar(symbol, on: state.tool == t) { state.select(t) }
     }
 
     private func export(all: Bool) {
@@ -338,7 +372,63 @@ struct EditorView: View {
     }
 }
 
-// MARK: - Barra de herramientas (estilo GoodNotes)
+// MARK: - Pestañas de cuadernos abiertos
+
+struct TabStrip: View {
+    @ObservedObject var store: Store
+    let current: UUID?
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button {
+                store.path.removeAll()
+            } label: {
+                Image(systemName: "house")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 44, height: 34)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(store.tabs, id: \.self) { id in
+                        if let nb = store.notebook(id) {
+                            let on = id == current
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(coverColors[abs(nb.cover) % coverColors.count])
+                                    .frame(width: 8, height: 8)
+                                Text(nb.title)
+                                    .lineLimit(1)
+                                    .font(.subheadline.weight(on ? .semibold : .regular))
+                                Spacer(minLength: 0)
+                                Button {
+                                    store.closeTab(id, current: current)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(Color.secondary)
+                                        .frame(width: 22, height: 22)
+                                }
+                            }
+                            .padding(.leading, 12)
+                            .padding(.trailing, 6)
+                            .frame(width: 170, height: 32)
+                            .background(on ? Color(.systemBackground) : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: 9))
+                            .contentShape(Rectangle())
+                            .onTapGesture { store.switchTab(id) }
+                        }
+                    }
+                }
+                .padding(.trailing, 8)
+            }
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 3)
+        .background(Color(.secondarySystemBackground))
+    }
+}
+
+// MARK: - Barras de herramientas
 
 struct ToolIcon: View {
     let symbol: String
@@ -354,9 +444,66 @@ struct ToolIcon: View {
     }
 }
 
-struct ToolBar: View {
+extension PenType {
+    var detail: String {
+        switch self {
+        case .fountain: return "Cambia con la presión y el giro del Pencil"
+        case .ballpoint: return "Trazo parejo para escribir rápido"
+        case .pencil: return "Grafito; inclinalo para sombrear"
+        case .monoline: return "Grosor constante, ideal para croquis"
+        case .watercolor: return "Translúcida, se acumula al pasar"
+        case .crayon: return "Gruesa y con textura"
+        }
+    }
+
+    var sampleWidth: CGFloat {
+        switch self {
+        case .fountain: return 3.5
+        case .ballpoint: return 2
+        case .pencil: return 2.5
+        case .monoline: return 1.2
+        case .watercolor: return 9
+        case .crayon: return 6
+        }
+    }
+
+    var sampleOpacity: Double {
+        switch self {
+        case .pencil: return 0.6
+        case .watercolor: return 0.35
+        case .crayon: return 0.85
+        default: return 1
+        }
+    }
+}
+
+/// Muestra de trazo de cada lapicera.
+struct PenSample: View {
+    let type: PenType
+    let color: Color
+
+    var body: some View {
+        GeometryReader { g in
+            let w = g.size.width
+            let h = g.size.height
+            Path { p in
+                p.move(to: CGPoint(x: w * 0.06, y: h * 0.65))
+                p.addCurve(to: CGPoint(x: w * 0.94, y: h * 0.35),
+                           control1: CGPoint(x: w * 0.35, y: -h * 0.35),
+                           control2: CGPoint(x: w * 0.6, y: h * 1.35))
+            }
+            .stroke(color.opacity(type.sampleOpacity),
+                    style: StrokeStyle(lineWidth: type.sampleWidth,
+                                       lineCap: type == .fountain ? .butt : .round,
+                                       dash: type == .crayon ? [1.5, 1] : []))
+        }
+    }
+}
+
+/// Segunda barra: opciones de la herramienta activa (como la barra flotante de GoodNotes).
+struct OptionsBar: View {
     @ObservedObject var state: EditorState
-    @Binding var photo: PhotosPickerItem?
+    @State private var showPens = false
 
     private var selectedItem: NoteItem? {
         guard let sel = state.selected else { return nil }
@@ -365,40 +512,23 @@ struct ToolBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                toolButton(.pen, "pencil.tip")
-
-                toolButton(.highlighter, "highlighter")
-
-                Menu {
-                    Picker("Goma", selection: $state.settings.eraserMode) {
-                        ForEach(EraserMode.allCases) { m in
-                            Text(m.label).tag(m)
-                        }
-                    }
+            HStack(spacing: 6) {
+                Button {
+                    state.controller?.undo()
                 } label: {
-                    ToolIcon(symbol: "eraser", on: state.tool == .eraser)
-                } primaryAction: {
-                    state.select(.eraser)
+                    ToolIcon(symbol: "arrow.uturn.backward", on: false)
                 }
-
-                toolButton(.shape, "triangle")
-                toolButton(.lasso, "lasso")
-                toolButton(.text, "textformat")
-
-                PhotosPicker(selection: $photo, matching: .images) {
-                    ToolIcon(symbol: "photo", on: false)
+                Button {
+                    state.controller?.redo()
+                } label: {
+                    ToolIcon(symbol: "arrow.uturn.forward", on: false)
                 }
+                Divider().frame(height: 26)
 
-                toolButton(.hand, "hand.point.up.left")
-                toolButton(.laser, "rays")
-
-                Divider().frame(height: 26).padding(.horizontal, 6)
-
-                ColorRow(state: state)
-                WidthRow(state: state)
+                content
 
                 if let item = selectedItem {
+                    Divider().frame(height: 26)
                     if item.kind == .text {
                         Button {
                             state.editingIsNew = false
@@ -413,62 +543,158 @@ struct ToolBar: View {
                         ToolIcon(symbol: "trash", on: false, tint: .red)
                     }
                 }
-
-                Divider().frame(height: 26).padding(.horizontal, 6)
-
-                Button {
-                    state.controller?.undo()
-                } label: {
-                    ToolIcon(symbol: "arrow.uturn.backward", on: false)
-                }
-                Button {
-                    state.controller?.redo()
-                } label: {
-                    ToolIcon(symbol: "arrow.uturn.forward", on: false)
-                }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             .padding(.vertical, 4)
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.25)))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
         }
-        .background(Color(.systemBackground))
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemBackground))
     }
 
-    private func toolButton(_ t: ToolKind, _ symbol: String) -> some View {
-        Button {
-            state.select(t)
-        } label: {
-            ToolIcon(symbol: symbol, on: state.tool == t)
+    @ViewBuilder private var content: some View {
+        switch state.tool {
+        case .pen, .shape:
+            ForEach(PenType.allCases) { t in
+                let on = state.settings.penType == t
+                Button {
+                    if on { showPens = true } else { state.settings.penType = t }
+                } label: {
+                    VStack(spacing: 0) {
+                        PenSample(type: t, color: on ? Color(uiColor: UIColor(hex: state.currentColorHex)) : Color.primary)
+                            .frame(width: 44, height: 22)
+                        Text(t.label)
+                            .font(.system(size: 9, weight: on ? .semibold : .regular))
+                            .foregroundStyle(on ? Color.accentColor : Color.secondary)
+                    }
+                    .frame(width: 56, height: 40)
+                    .background(on ? Color.accentColor.opacity(0.15) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            Button {
+                showPens = true
+            } label: {
+                ToolIcon(symbol: "slider.horizontal.3", on: false)
+            }
+            .popover(isPresented: $showPens) {
+                PenPicker(state: state)
+            }
+            Divider().frame(height: 26)
+            WidthRow(state: state)
+            ColorRow(state: state)
+        case .highlighter:
+            WidthRow(state: state)
+            ColorRow(state: state)
+        case .eraser:
+            Picker("Goma", selection: $state.settings.eraserMode) {
+                ForEach(EraserMode.allCases) { m in
+                    Text(m.label).tag(m)
+                }
+            }
+            .pickerStyle(.menu)
+            WidthRow(state: state)
+        case .lasso:
+            hint("Rodeá trazos con el lápiz para moverlos, copiarlos o borrarlos")
+        case .text:
+            hint("Tocá la página donde quieras escribir")
+        case .hand:
+            hint("Tocá un texto, nota o imagen para moverlo o cambiar su tamaño")
+        case .laser:
+            hint("Puntero láser: el trazo se borra solo")
         }
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(Color.secondary)
+            .padding(.horizontal, 6)
     }
 }
 
-/// Segunda fila: tipos de lapicera, como en GoodNotes.
-struct PenRow: View {
+/// Menú completo de lapiceras: tipo, grosor y color.
+struct PenPicker: View {
     @ObservedObject var state: EditorState
 
+    private let presets = ["1A1A1A", "5C5C5C", "1E4FD8", "0A84FF", "1B8A3A", "34C759",
+                           "D62828", "FF6B6B", "F28C28", "FFD60A", "7B2CBF", "FF4FA3"]
+
+    private var width: Binding<Double> {
+        Binding(
+            get: { pick(state.settings.penWidths, state.settings.penWidth, 2.8) },
+            set: { v in
+                let i = state.settings.penWidth
+                if state.settings.penWidths.indices.contains(i) { state.settings.penWidths[i] = v }
+            }
+        )
+    }
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(PenType.allCases) { t in
-                    let on = state.settings.penType == t
-                    Button {
-                        state.settings.penType = t
-                    } label: {
-                        VStack(spacing: 2) {
-                            Image(systemName: t.symbol).font(.system(size: 17))
-                            Text(t.label).font(.system(size: 10))
+        let current = Color(uiColor: UIColor(hex: pick(state.settings.penColors, state.settings.penColor, "1A1A1A")))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Lapiceras").font(.headline)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(PenType.allCases) { t in
+                        let on = state.settings.penType == t
+                        Button {
+                            state.settings.penType = t
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                PenSample(type: t, color: current).frame(height: 36)
+                                Text(t.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Color.primary)
+                                Text(t.detail)
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.secondary)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor, lineWidth: on ? 2 : 0))
                         }
-                        .frame(width: 64, height: 42)
-                        .foregroundStyle(on ? Color.accentColor : Color.primary)
-                        .background(on ? Color.accentColor.opacity(0.18) : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
+
+                Text("Grosor").font(.subheadline.weight(.semibold))
+                HStack {
+                    Slider(value: width, in: 0.5...12)
+                    Text(String(format: "%.1f", width.wrappedValue))
+                        .monospacedDigit()
+                        .frame(width: 36)
+                }
+
+                Text("Color").font(.subheadline.weight(.semibold))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
+                    ForEach(presets, id: \.self) { c in
+                        Circle()
+                            .fill(Color(uiColor: UIColor(hex: c)))
+                            .frame(width: 30, height: 30)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.accentColor,
+                                            lineWidth: pick(state.settings.penColors, state.settings.penColor, "") == c ? 3 : 0)
+                                    .padding(-4)
+                            )
+                            .onTapGesture {
+                                let i = state.settings.penColor
+                                if state.settings.penColors.indices.contains(i) { state.settings.penColors[i] = c }
+                            }
+                    }
+                }
+
+                Toggle("Corregir formas al mantener el lápiz quieto", isOn: $state.settings.autoShape)
+                    .font(.subheadline)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .padding(16)
         }
-        .background(Color(.secondarySystemBackground))
+        .frame(width: 370, height: 560)
     }
 }
 

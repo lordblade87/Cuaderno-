@@ -10,14 +10,14 @@ struct CuadernoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
+            NavigationStack(path: $store.path) {
                 LibraryView(store: store)
                     .navigationDestination(for: Route.self) { route in
                         switch route {
                         case .folder(let name):
                             LibraryView(store: store, folder: name)
                         case .notebook(let id):
-                            EditorView(store: store, id: id)
+                            EditorView(store: store, id: id).id(id)
                         }
                     }
             }
@@ -73,6 +73,7 @@ struct NoteItem: Codable, Identifiable, Equatable {
     var fontSize: Double = 18
     var color = "1A1A1A"
     var file = ""
+    var bg: String? = nil
 
     init(pageID: UUID, kind: Kind, rect: CGRect, file: String = "") {
         self.pageID = pageID
@@ -135,6 +136,12 @@ final class Store: ObservableObject {
         didSet { saveLib() }
     }
 
+    // Pestañas de cuadernos abiertos y navegación
+    @Published var path: [Route] = []
+    @Published var tabs: [UUID] = [] {
+        didSet { UserDefaults.standard.set(tabs.map { $0.uuidString }, forKey: "tabs") }
+    }
+
     let root: URL
     private var pdfCache: [String: PDFDocument] = [:]
 
@@ -143,6 +150,32 @@ final class Store: ObservableObject {
         if let data = try? Data(contentsOf: root.appendingPathComponent("library.json")),
            let saved = try? JSONDecoder().decode(Library.self, from: data) {
             lib = saved
+        }
+        let saved = UserDefaults.standard.stringArray(forKey: "tabs") ?? []
+        let ids = Set(lib.notebooks.map { $0.id })
+        tabs = saved.compactMap { UUID(uuidString: $0) }.filter { ids.contains($0) }
+    }
+
+    func openTab(_ id: UUID) {
+        if !tabs.contains(id) { tabs.append(id) }
+    }
+
+    func switchTab(_ id: UUID) {
+        if let last = path.last, case .notebook(let cur) = last {
+            if cur != id { path[path.count - 1] = .notebook(id) }
+        } else {
+            path.append(.notebook(id))
+        }
+    }
+
+    func closeTab(_ id: UUID, current: UUID?) {
+        guard let i = tabs.firstIndex(of: id) else { return }
+        tabs.remove(at: i)
+        guard id == current else { return }
+        if tabs.isEmpty {
+            if !path.isEmpty { path.removeLast() }
+        } else {
+            switchTab(tabs[min(i, tabs.count - 1)])
         }
     }
 
@@ -196,6 +229,7 @@ final class Store: ObservableObject {
         try? FileManager.default.removeItem(at: dir(id))
         pdfCache = pdfCache.filter { !$0.key.hasPrefix(id.uuidString) }
         lib.notebooks.removeAll { $0.id == id }
+        tabs.removeAll { $0 == id }
     }
 
     /// Inserta las páginas de un PDF dentro de un cuaderno existente.
@@ -432,6 +466,10 @@ func drawElements(_ store: Store, _ nb: Notebook, _ page: Page) {
                 img.draw(in: el.rect)
             }
         case .text:
+            if let bg = el.bg {
+                UIColor(hex: bg).setFill()
+                UIRectFill(el.rect)
+            }
             (el.text as NSString).draw(
                 with: el.rect,
                 options: [.usesLineFragmentOrigin, .usesFontLeading],

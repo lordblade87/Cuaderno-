@@ -37,6 +37,9 @@ struct LibraryView: View {
 
     var body: some View {
         ScrollView {
+            if !store.tabs.isEmpty {
+                OpenTabs(store: store)
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 24)], spacing: 28) {
                 ForEach(subfolders, id: \.self) { name in
                     NavigationLink(value: Route.folder(name)) {
@@ -218,6 +221,39 @@ struct NewNotebookSheet: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Acceso rápido a los cuadernos que quedaron abiertos en pestañas.
+struct OpenTabs: View {
+    @ObservedObject var store: Store
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Text("Abiertos").font(.caption).foregroundStyle(Color.secondary)
+                ForEach(store.tabs, id: \.self) { id in
+                    if let nb = store.notebook(id) {
+                        Button {
+                            store.switchTab(id)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(coverColors[abs(nb.cover) % coverColors.count])
+                                    .frame(width: 8, height: 8)
+                                Text(nb.title).lineLimit(1).font(.subheadline)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color(.secondarySystemBackground), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
         }
     }
 }
