@@ -154,6 +154,15 @@ final class Store: ObservableObject {
         let saved = UserDefaults.standard.stringArray(forKey: "tabs") ?? []
         let ids = Set(lib.notebooks.map { $0.id })
         tabs = saved.compactMap { UUID(uuidString: $0) }.filter { ids.contains($0) }
+
+        // Solo para las capturas automáticas en el simulador
+        if ProcessInfo.processInfo.arguments.contains("-demo") {
+            let demo = Notebook(title: "Construcciones", cover: 0, pages: [Page(paper: .grid)])
+            let other = Notebook(title: "Estructuras", cover: 3, pages: [Page(paper: .ruled)])
+            lib.notebooks = [demo, other]
+            tabs = [demo.id, other.id]
+            path = [.notebook(demo.id)]
+        }
     }
 
     func openTab(_ id: UUID) {

@@ -9,17 +9,28 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verificar que la app compila para iPad
-        run: |
-          xcodebuild -version
-          SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
-          cd Cuaderno.swiftpm
-          xcrun swiftc -typecheck -parse-as-library \
-            -sdk "$SDK" -target arm64-apple-ios17.5-simulator \
-            $(ls *.swift | grep -v Package.swift)
-      - name: Compilar el paquete completo (informativo)
-        continue-on-error: true
+      - name: Compilar la app para iPad
         run: |
           cd Cuaderno.swiftpm
           set -o pipefail
-          xcodebuild -scheme Cuaderno -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -40
+          xcodebuild -scheme Cuaderno -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E "error:|warning: unre|BUILD " || true
+          test -n "$(find build -name '*.app' -type d | head -1)"
+      - name: Captura en el simulador
+        continue-on-error: true
+        run: |
+          cd Cuaderno.swiftpm
+          APP=$(find build -name "*.app" -type d | head -1)
+          DEV=$(xcrun simctl list devices available | grep -i "iPad mini" | head -1 | grep -oE '[0-9A-F-]{36}')
+          echo "app=$APP dev=$DEV"
+          xcrun simctl boot "$DEV"
+          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl install "$DEV" "$APP"
+          xcrun simctl launch "$DEV" com.matias.cuaderno -demo
+          sleep 15
+          xcrun simctl io "$DEV" screenshot ../editor.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captura
+          path: editor.png
+          if-no-files-found: ignore
