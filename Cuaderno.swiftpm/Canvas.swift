@@ -682,7 +682,7 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         flush()
         guard let nb = store.notebook(nbID), nb.pages.indices.contains(i) else { return }
         let page = nb.pages[i]
-        let copy = Page(paper: page.paper, pdfIndex: page.pdfIndex, pdfFile: page.pdfFile)
+        let copy = Page(paper: page.paper, pdfIndex: page.pdfIndex, pdfFile: page.pdfFile, landscape: page.landscape)
         try? FileManager.default.copyItem(at: store.drawingURL(nbID, page.id), to: store.drawingURL(nbID, copy.id))
         let items: [NoteItem] = nb.elements.filter { $0.pageID == page.id }.map { old in
             var n = old
@@ -703,6 +703,20 @@ final class CanvasController: UIViewController, PKCanvasViewDelegate, UIGestureR
         let i = currentIndex()
         store.mutate(nbID) { if $0.pages.indices.contains(i) { $0.pages[i].paper = paper } }
         reload()
+    }
+
+    func toggleLandscape() {
+        flush()
+        let i = currentIndex()
+        store.mutate(nbID) { nb in
+            if nb.pages.indices.contains(i), nb.pages[i].pdfIndex == nil {
+                nb.pages[i].landscape = !(nb.pages[i].landscape ?? false)
+            }
+        }
+        reload()
+        fit(reset: true)
+        scrollTo(i, animated: false)
+        state.thumbs += 1
     }
 
     func insertPDF(_ url: URL) {

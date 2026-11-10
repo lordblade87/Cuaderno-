@@ -26,6 +26,9 @@ let package = Package(
                 .landscapeRight,
                 .landscapeLeft,
                 .portraitUpsideDown(.when(deviceFamilies: [.pad]))
+            ],
+            capabilities: [
+                .microphone(purposeString: "Para grabar el audio de la clase junto a tus apuntes.")
             ]
         )
     ],

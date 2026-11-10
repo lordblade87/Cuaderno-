@@ -23,11 +23,13 @@ final class EditorState: ObservableObject {
 
     private var previousTool: ToolKind = .eraser
     weak var controller: CanvasController?
+    let audio: AudioModel
 
     init(store: Store, id: UUID) {
         self.store = store
         self.id = id
         settings = ToolSettings.load()
+        audio = AudioModel(dir: store.dir(id))
     }
 
     var nb: Notebook? { store.notebook(id) }
@@ -174,6 +176,8 @@ struct EditorView: View {
     @State private var photo: PhotosPickerItem?
     @State private var share: ShareItem?
     @State private var showPDF = false
+    @State private var showSearch = false
+    @State private var showAudio = false
 
     init(store: Store, id: UUID) {
         self.store = store
@@ -226,6 +230,13 @@ struct EditorView: View {
                     .foregroundStyle(.secondary)
 
                 Button {
+                    showSearch = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                AudioButton(audio: state.audio) { showAudio = true }
+
+                Button {
                     state.toggleBookmark()
                 } label: {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
@@ -248,6 +259,16 @@ struct EditorView: View {
                         }
                     }
                     Toggle("Regla", isOn: $state.ruler)
+                    Button("Pegar imagen copiada", systemImage: "doc.on.clipboard") {
+                        if let data = UIPasteboard.general.image?.pngData() {
+                            state.controller?.insertImage(data)
+                        }
+                    }
+                    if !isPDFPage {
+                        Button("Girar página (vertical / apaisada)", systemImage: "rotate.right") {
+                            state.controller?.toggleLandscape()
+                        }
+                    }
                     Toggle("Formas al mantener el lápiz", isOn: $state.settings.autoShape)
                     Button("Duplicar página", systemImage: "plus.square.on.square") {
                         state.controller?.duplicatePage(state.current)
@@ -271,6 +292,12 @@ struct EditorView: View {
         .sheet(item: $share) { item in
             ActivityView(url: item.url)
         }
+        .sheet(isPresented: $showSearch) {
+            SearchSheet(state: state)
+        }
+        .sheet(isPresented: $showAudio) {
+            AudioSheet(audio: state.audio)
+        }
         .fileImporter(isPresented: $showPDF, allowedContentTypes: [UTType.pdf]) { result in
             if case .success(let url) = result {
                 state.controller?.insertPDF(url)
@@ -288,6 +315,8 @@ struct EditorView: View {
         }
         .onDisappear {
             state.controller?.flush()
+            state.audio.stop()
+            state.audio.stopPlayback()
             let i = state.current
             store.mutate(state.id) { $0.lastIndex = i }
         }

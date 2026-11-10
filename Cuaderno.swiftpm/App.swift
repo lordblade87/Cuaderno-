@@ -33,7 +33,7 @@ enum Route: Hashable {
 // MARK: - Modelo
 
 enum Paper: String, Codable, CaseIterable, Identifiable {
-    case blank, ruled, grid, dots, cornell
+    case blank, ruled, grid, dots, cornell, iso
 
     var id: String { rawValue }
 
@@ -44,6 +44,7 @@ enum Paper: String, Codable, CaseIterable, Identifiable {
         case .grid: return "Cuadriculada"
         case .dots: return "Punteada"
         case .cornell: return "Cornell"
+        case .iso: return "Isométrica"
         }
     }
 }
@@ -54,6 +55,7 @@ struct Page: Codable, Identifiable, Equatable {
     var pdfIndex: Int? = nil
     var pdfFile: String? = nil
     var bookmark: Bool? = nil
+    var landscape: Bool? = nil
 }
 
 /// Cuadro de texto o imagen puesto sobre una página (coordenadas de la página).
@@ -270,7 +272,7 @@ final class Store: ObservableObject {
                 return p.rotation % 180 == 0 ? b.size : CGSize(width: b.height, height: b.width)
             }
         }
-        return CGSize(width: 595, height: 842) // A4
+        return page.landscape == true ? CGSize(width: 842, height: 595) : CGSize(width: 595, height: 842) // A4
     }
 }
 
@@ -387,6 +389,27 @@ func drawPaper(in ctx: CGContext, size: CGSize, paper: Paper, pdfPage: PDFPage?)
         ctx.move(to: CGPoint(x: margin, y: top))
         ctx.addLine(to: CGPoint(x: margin, y: bottom))
         ctx.strokePath()
+    case .iso:
+        ctx.saveGState()
+        ctx.clip(to: CGRect(origin: .zero, size: size))
+        let dx = step * 0.866
+        var x = dx
+        while x < size.width {
+            ctx.move(to: CGPoint(x: x, y: 0))
+            ctx.addLine(to: CGPoint(x: x, y: size.height))
+            x += dx
+        }
+        let rise = size.width * 0.5774
+        var c = -rise
+        while c < size.height + rise {
+            ctx.move(to: CGPoint(x: 0, y: c))
+            ctx.addLine(to: CGPoint(x: size.width, y: c + rise))
+            ctx.move(to: CGPoint(x: 0, y: c))
+            ctx.addLine(to: CGPoint(x: size.width, y: c - rise))
+            c += step
+        }
+        ctx.strokePath()
+        ctx.restoreGState()
     }
 }
 

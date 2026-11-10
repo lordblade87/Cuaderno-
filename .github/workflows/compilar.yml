@@ -16,4 +16,10 @@ jobs:
           cd Cuaderno.swiftpm
           xcrun swiftc -typecheck -parse-as-library \
             -sdk "$SDK" -target arm64-apple-ios17.5-simulator \
-            App.swift Library.swift Editor.swift Canvas.swift Shapes.swift Tools.swift
+            $(ls *.swift | grep -v Package.swift)
+      - name: Compilar el paquete completo (informativo)
+        continue-on-error: true
+        run: |
+          cd Cuaderno.swiftpm
+          set -o pipefail
+          xcodebuild -scheme Cuaderno -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -40
