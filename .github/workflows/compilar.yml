@@ -2,7 +2,11 @@ name: Compilar
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   compilar:
@@ -28,9 +32,15 @@ jobs:
           xcrun simctl launch "$DEV" com.matias.cuaderno -demo
           sleep 15
           xcrun simctl io "$DEV" screenshot ../editor.png
-      - uses: actions/upload-artifact@v4
+      - name: Guardar la captura en la rama capturas
         if: always()
-        with:
-          name: captura
-          path: editor.png
-          if-no-files-found: ignore
+        continue-on-error: true
+        run: |
+          [ -f editor.png ] || exit 0
+          git config user.name "capturas"
+          git config user.email "capturas@users.noreply.github.com"
+          git checkout -q --orphan capturas
+          git rm -rfq --cached .
+          git add -f editor.png
+          git commit -qm "captura"
+          git push -qf origin capturas
